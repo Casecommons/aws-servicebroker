@@ -1,0 +1,138 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: AWS Service Broker - Amazon Elasticsearch
+Metadata:
+  AWS::ServiceBroker::Specification:
+    Version: 1.0
+    Tags:
+    - AWS
+    - Elasticsearch
+    - database
+    Name: elasticsearch
+    DisplayName: Amazon Elasticsearch
+    LongDescription: Amazon Elasticsearch Service is a fully managed service that makes it easy 
+      for you to deploy, secure, and operate Elasticsearch at scale with zero down time. 
+      The service offers open-source Elasticsearch APIs, managed Kibana, and integrations with 
+      Logstash and other AWS Services, enabling you to securely ingest data from any source and 
+      search, analyze, and visualize it in real time. Amazon Elasticsearch Service lets you pay 
+      only for what you use – there are no upfront costs or usage requirements. With Amazon 
+      Elasticsearch Service, you get the ELK stack you need, without the operational overhead.
+    ImageUrl: http://optimalbi.com/wp-content/uploads/2016/02/amazon-elasticsearch-service.png
+    DocumentationUrl: https://docs.aws.amazon.com/elasticsearch-service/
+    ProviderDisplayName: Amazon Web Services
+    ServicePlans:
+      production:
+        DisplayName: Production
+        Description: Configuration designed for production deployments
+        LongDescription: Creates an Amazon Elasticsearch cluster optimised for
+          production use
+        Cost: https://aws.amazon.com/elasticsearch-service/pricing/
+        ParameterValues: {}
+      dev:
+        DisplayName: Development
+        Description: Configuration designed for development and testing deployments
+        LongDescription: Creates an Amazon Elasticsearch cluster optimised for
+          dev/test use
+        Cost: https://aws.amazon.com/elasticsearch-service/pricing/
+        ParameterValues: {}
+      custom:
+        DisplayName: Custom
+        Description: Custom Configuration for Advanced deployments
+        LongDescription: Creates an Amazon Elasticsearch cluster with custom
+          configuration
+        Cost: https://aws.amazon.com/elasticsearch-service/pricing/
+        ParameterValues: {}
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: Elasticsearch Options
+      Parameters:
+      - ElasticsearchVersion
+    - Label:
+        default: Network and Security
+      Parameters:
+      - SubnetId
+      - VpcId
+      - AccessCidr
+    ParameterLabels:
+      ElasticsearchVersion:
+        default: Elasticsearch Version
+      SubnetId:
+        default: Subnet Id
+      VpcId:
+        default: VPC Id
+      AccessCidr:
+        default: Access CIDR
+Parameters:
+  AccessCidr:
+    Description: CIDR block to allow to connect to database
+    Type: String
+  ElasticsearchVersion:
+    Description: The version number of the Elasticsearch cluster to use.
+    Type: String
+    Default: 6.4
+    AllowedValues:
+    - 1.5
+    - 2.3
+    - 5.1
+    - 5.3
+    - 5.5
+    - 5.6
+    - 6.0
+    - 6.2
+    - 6.3
+    - 6.4
+  SubnetId:
+    Description: The ID of the subnet to launch the Elasticsearch cluster into
+    Type: AWS::EC2::Subnet::Id
+  VpcId:
+    Description: The ID of the VPC to launch the Elasticsearch cluster into
+    Type: AWS::EC2::VPC::Id
+Resources:
+  ElasticsearchCluster:
+    Type: AWS::Elasticsearch::Domain
+    Properties:
+      AccessPolicies:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: "*"
+            Action: es:*
+            Resource: "*"
+      EBSOptions:
+        EBSEnabled: true
+        VolumeSize: 20
+        VolumeType: gp2
+      ElasticsearchClusterConfig:
+          InstanceCount: 1
+          InstanceType: t2.small.elasticsearch
+          ZoneAwarenessEnabled: false
+      ElasticsearchVersion: !Ref ElasticsearchVersion
+      SnapshotOptions:
+        AutomatedSnapshotStartHour: 14
+      VPCOptions:
+        SecurityGroupIds:
+          - !Ref ElasticsearchSecurityGroup
+        SubnetIds:
+          - !Ref SubnetId
+  ElasticsearchSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub Allow Client connections to Elasticsearch in ${AWS::StackName}
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: !Ref AccessCidr
+      SecurityGroupEgress:
+      - IpProtocol: '-1'
+        FromPort: '-1'
+        ToPort: '-1'
+        CidrIp: 0.0.0.0/0
+      VpcId: !Ref VpcId
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-es-sg
+Outputs:
+  EndpointAddress:
+    Value: !GetAtt ElasticsearchCluster.DomainEndpoint
